@@ -1,25 +1,164 @@
-let bleCharacteristic = null;
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>메카넘휠 Web BLE 제어기</title>
+  <style>
+    * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #f3f4f6;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h2 { margin: 10px 0 5px 0; color: #1f2937; }
+    #status { margin-bottom: 15px; font-size: 14px; color: #6b7280; font-weight: bold; }
+    .connect-btn {
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 25px;
+    }
+    .connect-btn:active { background-color: #1d4ed8; }
+    .pad-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 80px);
+      grid-template-rows: repeat(3, 80px);
+      gap: 12px;
+      margin-bottom: 25px;
+    }
+    .btn {
+      background-color: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 24px;
+      font-weight: bold;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      touch-action: manipulation;
+    }
+    .btn:active { background-color: #1d4ed8; transform: scale(0.95); }
+    .stop-box {
+      background-color: #e5e7eb;
+      color: #9ca3af;
+      font-size: 14px;
+      box-shadow: none;
+      cursor: default;
+    }
+    .rotate-group {
+      display: flex;
+      gap: 15px;
+    }
+    .rotate-btn {
+      width: 125px;
+      height: 60px;
+      font-size: 16px;
+      background-color: #6366f1;
+    }
+    .rotate-btn:active { background-color: #4f46e5; }
+  </style>
+</head>
+<body>
 
-// 1. 장치 검색 및 연결
-async function connectBLE() {
-  try {
-    const device = await navigator.bluetooth.requestDevice({
-      acceptAllDevices: true, // 또는 특정 service UUID 필터링
-      optionalServices: ['0000ffe0-0000-1000-8000-00805f9b34fb']
+  <h2>메카넘휠 제어기</h2>
+  <div id="status">상태: 블루투스 연결 대기 중</div>
+  <button id="btnConnect" class="connect-btn" onclick="connectBLE()">BLE 기기 검색 및 연결</button>
+
+  <!-- 8방향 패드 -->
+  <div class="pad-grid">
+    <button class="btn" data-cmd="Q">↖</button>
+    <button class="btn" data-cmd="F">▲</button>
+    <button class="btn" data-cmd="E">↗</button>
+    <button class="btn" data-cmd="L">◀</button>
+    <div class="btn stop-box">STOP</div>
+    <button class="btn" data-cmd="R">▶</button>
+    <button class="btn" data-cmd="Z">↙</button>
+    <button class="btn" data-cmd="B">▼</button>
+    <button class="btn" data-cmd="C">↘</button>
+  </div>
+
+  <!-- 제자리 회전 패드 -->
+  <div class="rotate-group">
+    <button class="btn rotate-btn" data-cmd="J">↺ 좌회전</button>
+    <button class="btn rotate-btn" data-cmd="K">우회전 ↻</button>
+  </div>
+
+  <script>
+    const SERVICE_UUID = '0000ffe0-0000-1000-8000-00805f9b34fb';
+    const CHARACTERISTIC_UUID = '0000ffe1-0000-1000-8000-00805f9b34fb';
+
+    let bleCharacteristic = null;
+    const statusDiv = document.getElementById('status');
+    const connectBtn = document.getElementById('btnConnect');
+
+    // 1. BLE 장치 검색 및 연결
+    async function connectBLE() {
+      try {
+        statusDiv.innerText = "상태: 기기 검색 중...";
+        const device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [SERVICE_UUID]
+        });
+
+        statusDiv.innerText = `상태: ${device.name || '장치'} 연결 중...`;
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+        statusDiv.innerText = `상태: 연결됨 (${device.name || 'HC-06 LE'})`;
+        statusDiv.style.color = "#16a34a";
+        connectBtn.style.display = "none";
+      } catch (error) {
+        console.error(error);
+        statusDiv.innerText = "상태: 연결 실패 (" + error.message + ")";
+        statusDiv.style.color = "#dc2626";
+      }
+    }
+
+    // 2. 명령 전송 함수
+    async function sendCommand(cmd) {
+      if (!bleCharacteristic) return;
+      try {
+        const encoder = new TextEncoder();
+        await bleCharacteristic.writeValueWithoutResponse(encoder.encode(cmd));
+      } catch (err) {
+        console.error("전송 오류:", err);
+      }
+    }
+
+    // 3. 버튼 누름(동작) / 뗌(정지) 이벤트 바인딩
+    document.querySelectorAll('.btn[data-cmd]').forEach(btn => {
+      const cmd = btn.getAttribute('data-cmd');
+
+      // 마우스 & 터치 누를 때 동작
+      btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        sendCommand(cmd);
+      });
+
+      // 손을 떼거나 화면 밖으로 벗어날 때 즉시 정지('S')
+      btn.addEventListener('pointerup', (e) => {
+        e.preventDefault();
+        sendCommand('S');
+      });
+      btn.addEventListener('pointerleave', (e) => {
+        e.preventDefault();
+        sendCommand('S');
+      });
     });
-
-    const server = await device.gatt.connect();
-    const service = await server.getPrimaryService('0000ffe0-0000-1000-8000-00805f9b34fb');
-    bleCharacteristic = await service.getCharacteristic('0000ffe1-0000-1000-8000-00805f9b34fb');
-    alert('연결 성공!');
-  } catch (error) {
-    console.error('BLE 연결 에러:', error);
-  }
-}
-
-// 2. 메카넘휠 조작 명령 전송
-async function sendCommand(cmdChar) {
-  if (!bleCharacteristic) return;
-  const encoder = new TextEncoder();
-  await bleCharacteristic.writeValueWithoutResponse(encoder.encode(cmdChar));
-}
+  </script>
+</body>
+</html>
