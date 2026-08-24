@@ -1,0 +1,25 @@
+let bleCharacteristic = null;
+
+// 1. 장치 검색 및 연결
+async function connectBLE() {
+  try {
+    const device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true, // 또는 특정 service UUID 필터링
+      optionalServices: ['0000ffe0-0000-1000-8000-00805f9b34fb']
+    });
+
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService('0000ffe0-0000-1000-8000-00805f9b34fb');
+    bleCharacteristic = await service.getCharacteristic('0000ffe1-0000-1000-8000-00805f9b34fb');
+    alert('연결 성공!');
+  } catch (error) {
+    console.error('BLE 연결 에러:', error);
+  }
+}
+
+// 2. 메카넘휠 조작 명령 전송
+async function sendCommand(cmdChar) {
+  if (!bleCharacteristic) return;
+  const encoder = new TextEncoder();
+  await bleCharacteristic.writeValueWithoutResponse(encoder.encode(cmdChar));
+}
