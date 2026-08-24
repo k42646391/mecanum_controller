@@ -16,25 +16,25 @@
       align-items: center;
     }
     h2 { margin: 10px 0 5px 0; color: #1f2937; }
-    #status { margin-bottom: 15px; font-size: 14px; color: #6b7280; font-weight: bold; }
-    .connect-btn {
-      background-color: #2563eb;
+    #status { margin-bottom: 12px; font-size: 14px; color: #4b5563; font-weight: bold; }
+    .btn-group { display: flex; gap: 10px; margin-bottom: 20px; }
+    .action-btn {
       color: white;
       border: none;
-      padding: 12px 24px;
-      font-size: 16px;
+      padding: 10px 18px;
+      font-size: 15px;
       font-weight: bold;
       border-radius: 8px;
       cursor: pointer;
-      margin-bottom: 25px;
     }
-    .connect-btn:active { background-color: #1d4ed8; }
+    .btn-connect { background-color: #2563eb; }
+    .btn-disconnect { background-color: #ef4444; display: none; }
     .pad-grid {
       display: grid;
       grid-template-columns: repeat(3, 80px);
       grid-template-rows: repeat(3, 80px);
       gap: 12px;
-      margin-bottom: 25px;
+      margin-bottom: 20px;
     }
     .btn {
       background-color: #3b82f6;
@@ -51,31 +51,31 @@
       touch-action: manipulation;
     }
     .btn:active { background-color: #1d4ed8; transform: scale(0.95); }
-    .stop-box {
-      background-color: #e5e7eb;
-      color: #9ca3af;
-      font-size: 14px;
-      box-shadow: none;
-      cursor: default;
-    }
-    .rotate-group {
-      display: flex;
-      gap: 15px;
-    }
-    .rotate-btn {
-      width: 125px;
+    .stop-box { background-color: #e5e7eb; color: #9ca3af; font-size: 14px; box-shadow: none; cursor: default; }
+    .rotate-group { display: flex; gap: 15px; margin-bottom: 20px; }
+    .rotate-btn { width: 125px; height: 55px; font-size: 16px; background-color: #6366f1; }
+    .log-box {
+      width: 270px;
+      background: #ffffff;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 12px;
+      color: #374151;
       height: 60px;
-      font-size: 16px;
-      background-color: #6366f1;
+      overflow-y: auto;
     }
-    .rotate-btn:active { background-color: #4f46e5; }
   </style>
 </head>
 <body>
 
   <h2>메카넘휠 제어기</h2>
   <div id="status">상태: 블루투스 연결 대기 중</div>
-  <button id="btnConnect" class="connect-btn" onclick="connectBLE()">BLE 기기 검색 및 연결</button>
+
+  <div class="btn-group">
+    <button id="btnConnect" class="action-btn btn-connect" onclick="connectBLE()">BLE 기기 연결</button>
+    <button id="btnDisconnect" class="action-btn btn-disconnect" onclick="disconnectBLE()">연결 해제</button>
+  </div>
 
   <!-- 8방향 패드 -->
   <div class="pad-grid">
@@ -90,66 +90,108 @@
     <button class="btn" data-cmd="C">↘</button>
   </div>
 
-  <!-- 제자리 회전 패드 -->
+  <!-- 제자리 회전 -->
   <div class="rotate-group">
     <button class="btn rotate-btn" data-cmd="J">↺ 좌회전</button>
     <button class="btn rotate-btn" data-cmd="K">우회전 ↻</button>
   </div>
 
+  <!-- 디버깅 로그 창 -->
+  <div id="logBox" class="log-box">로그: 대기 중...</div>
+
   <script>
     const SERVICE_UUID = '0000ffe0-0000-1000-8000-00805f9b34fb';
     const CHARACTERISTIC_UUID = '0000ffe1-0000-1000-8000-00805f9b34fb';
 
+    let bleDevice = null;
     let bleCharacteristic = null;
+
     const statusDiv = document.getElementById('status');
     const connectBtn = document.getElementById('btnConnect');
+    const disconnectBtn = document.getElementById('btnDisconnect');
+    const logBox = document.getElementById('logBox');
+
+    function log(msg) {
+      logBox.innerText = `[${new Date().toLocaleTimeString()}] ` + msg;
+    }
 
     // 1. BLE 장치 검색 및 연결
     async function connectBLE() {
       try {
         statusDiv.innerText = "상태: 기기 검색 중...";
-        const device = await navigator.bluetooth.requestDevice({
+        bleDevice = await navigator.bluetooth.requestDevice({
           acceptAllDevices: true,
           optionalServices: [SERVICE_UUID]
         });
 
-        statusDiv.innerText = `상태: ${device.name || '장치'} 연결 중...`;
-        const server = await device.gatt.connect();
+        // 기기가 비정상 종료되었을 때 자동 감지
+        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+        statusDiv.innerText = `상태: ${bleDevice.name || '장치'} 연결 중...`;
+        const server = await bleDevice.gatt.connect();
         const service = await server.getPrimaryService(SERVICE_UUID);
         bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
 
-        statusDiv.innerText = `상태: 연결됨 (${device.name || 'HC-06 LE'})`;
+        statusDiv.innerText = `상태: 연결됨 (${bleDevice.name || 'HC-06 LE'})`;
         statusDiv.style.color = "#16a34a";
         connectBtn.style.display = "none";
+        disconnectBtn.style.display = "inline-block";
+        log("연결 완료!");
       } catch (error) {
-        console.error(error);
-        statusDiv.innerText = "상태: 연결 실패 (" + error.message + ")";
+        statusDiv.innerText = "상태: 연결 실패";
         statusDiv.style.color = "#dc2626";
+        log("연결 오류: " + error.message);
       }
     }
 
-    // 2. 명령 전송 함수
+    // 2. BLE 연결 해제 함수
+    function disconnectBLE() {
+      if (bleDevice && bleDevice.gatt.connected) {
+        bleDevice.gatt.disconnect();
+      } else {
+        onDisconnected();
+      }
+    }
+
+    // 연결 끊김 발생 시 UI 복원
+    function onDisconnected() {
+      statusDiv.innerText = "상태: 연결 해제됨";
+      statusDiv.style.color = "#4b5563";
+      connectBtn.style.display = "inline-block";
+      disconnectBtn.style.display = "none";
+      bleCharacteristic = null;
+      log("장치 연결이 해제되었습니다.");
+    }
+
+    // 3. 데이터 전송 함수 (WithoutResponse 실패 시 WriteWithResponse 자동 폴백)
     async function sendCommand(cmd) {
-      if (!bleCharacteristic) return;
+      if (!bleCharacteristic) {
+        log("전송 불가: 기기 미연결");
+        return;
+      }
       try {
+        // 아두이노 수신 형식에 맞춰 필요 시 개행 추가 (예: cmd + '\n')
         const encoder = new TextEncoder();
-        await bleCharacteristic.writeValueWithoutResponse(encoder.encode(cmd));
+        const data = encoder.encode(cmd);
+
+        if (bleCharacteristic.properties.writeWithoutResponse) {
+          await bleCharacteristic.writeValueWithoutResponse(data);
+        } else {
+          await bleCharacteristic.writeValue(data);
+        }
+        log(`전송 성공: '${cmd}'`);
       } catch (err) {
-        console.error("전송 오류:", err);
+        log(`전송 실패: ${err.message}`);
       }
     }
 
-    // 3. 버튼 누름(동작) / 뗌(정지) 이벤트 바인딩
+    // 버튼 이벤트 바인딩
     document.querySelectorAll('.btn[data-cmd]').forEach(btn => {
       const cmd = btn.getAttribute('data-cmd');
-
-      // 마우스 & 터치 누를 때 동작
       btn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         sendCommand(cmd);
       });
-
-      // 손을 떼거나 화면 밖으로 벗어날 때 즉시 정지('S')
       btn.addEventListener('pointerup', (e) => {
         e.preventDefault();
         sendCommand('S');
