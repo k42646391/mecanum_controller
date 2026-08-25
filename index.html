@@ -124,7 +124,7 @@
       gap: 8px;
       box-shadow: 0 6px 20px rgba(6, 182, 212, 0.3);
       transition: all 0.2s;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
 
     .btn-connect:active {
@@ -206,7 +206,7 @@
       grid-template-columns: 1fr 1fr;
       gap: 12px;
       width: 100%;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }
 
     .btn-rotate {
@@ -247,6 +247,7 @@
       align-items: center;
       gap: 8px;
       box-sizing: border-box;
+      margin-bottom: 16px;
     }
 
     .terminal-dot {
@@ -266,6 +267,55 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    /* 권장 브라우저 안내 박스 */
+    .guide-box {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background-color: rgba(10, 15, 29, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      text-align: left;
+      font-size: 11px;
+      line-height: 1.55;
+      color: var(--text-sub);
+    }
+
+    .guide-title {
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11.5px;
+    }
+
+    .guide-item {
+      margin-bottom: 4px;
+    }
+
+    .guide-item:last-of-type {
+      margin-bottom: 0;
+    }
+
+    .guide-note {
+      color: #64748b;
+      font-size: 10.5px;
+      margin-top: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding-top: 6px;
+    }
+
+    .highlight {
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    .highlight-ios {
+      color: #f472b6;
+      font-weight: 600;
     }
   </style>
 </head>
@@ -323,6 +373,14 @@
       <div class="terminal-dot"></div>
       <div id="logText" class="terminal-text">System ready. Waiting for connection...</div>
     </div>
+
+    <!-- 권장 브라우저 안내 영역 -->
+    <div class="guide-box">
+      <div class="guide-title">ℹ️ 접속 환경별 권장 브라우저</div>
+      <div class="guide-item">• <span class="highlight">PC / 안드로이드</span>: <b>Google Chrome</b>, <b>Edge</b> 브라우저 사용</div>
+      <div class="guide-item">• <span class="highlight-ios">아이폰 / 아이패드(iOS)</span>: 기본 Safari/Chrome은 BLE를 미지원하므로 앱스토어에서 <b>Bluefy</b> 또는 <b>WebBLE</b> 전용 브라우저 설치 후 접속</div>
+      <div class="guide-note">* Web Bluetooth 보안 정책상 <b>HTTPS</b> 또는 <b>localhost</b> 주소에서만 동작합니다.</div>
+    </div>
   </div>
 
   <script>
@@ -349,6 +407,11 @@
     }
 
     async function connectBLE() {
+      if (!navigator.bluetooth) {
+        alert("현재 브라우저는 Web Bluetooth를 지원하지 않습니다.\n안드로이드/PC는 Chrome, iOS는 Bluefy 앱을 사용해 주세요.");
+        return;
+      }
+
       try {
         log("BLE 기기 검색 중...");
         bleDevice = await navigator.bluetooth.requestDevice({
